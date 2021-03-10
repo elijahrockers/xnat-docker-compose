@@ -15,7 +15,7 @@ ARG TOMCAT_XNAT_FOLDER_PATH=${CATALINA_HOME}/webapps/${TOMCAT_XNAT_FOLDER}
 ADD make-xnat-config.sh /usr/local/bin/make-xnat-config.sh
 ADD wait-for-postgres.sh /usr/local/bin/wait-for-postgres.sh
 
-RUN apk add --no-cache postgresql-client wget
+RUN apk add --no-cache postgresql-client wget libc6-compat
 RUN rm -rf ${CATALINA_HOME}/webapps/*
 RUN mkdir -p \
         ${TOMCAT_XNAT_FOLDER_PATH} \
@@ -36,9 +36,13 @@ RUN unzip -o -d ${TOMCAT_XNAT_FOLDER_PATH} /tmp/xnat-web-${XNAT_VER}.war
 RUN rm -f /tmp/xnat-web-${XNAT_VER}.war
 RUN apk del wget
 
+RUN wget https://www.yourkit.com/download/docker/YourKit-JavaProfiler-2020.9-docker.zip -P /tmp/ && \
+  unzip /tmp/YourKit-JavaProfiler-2020.9-docker.zip -d /usr/local && \
+  rm /tmp/YourKit-JavaProfiler-2020.9-docker.zip
+
 EXPOSE 8080
 
-ENV XNAT_HOME=${XNAT_HOME} XNAT_DATASOURCE_USERNAME=${XNAT_DATASOURCE_USERNAME} PGPASSWORD=${XNAT_DATASOURCE_PASSWORD}
+ENV XNAT_HOME=${XNAT_HOME} XNAT_DATASOURCE_USERNAME=${XNAT_DATASOURCE_USERNAME} PGPASSWORD=${XNAT_DATASOURCE_PASSWORD} LD_LIBRARY_PATH=/lib64
 
 CMD ["wait-for-postgres.sh", "/usr/local/tomcat/bin/catalina.sh", "run"]
 
