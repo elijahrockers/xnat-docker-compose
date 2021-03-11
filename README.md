@@ -1,5 +1,5 @@
 # Dockerized XNAT
-Use this repository to quickly deploy an [XNAT](https://xnat.org/) instance on [docker](https://www.docker.com/).
+Use this repository branch to quickly deploy user provided XNAT [XNAT](https://xnat.org/) war on [docker](https://www.docker.com/). This branch is specifically configured to support code debugging and profiling
 
 ## Introduction
 
@@ -17,14 +17,17 @@ This repository contains files to bootstrap XNAT deployment. The build creates t
 ## Usage
 
 
-1. Clone the [xnat-docker-compose](https://github.com/NrgXnat/xnat-docker-compose) repository.)
+1. Clone the [xnat-docker-compose](https://github.com/NrgXnat/xnat-docker-compose) repository and checkout the xnat-dev branch.)
 
 ```
 $ git clone https://github.com/NrgXnat/xnat-docker-compose
 $ cd xnat-docker-compose
+$ git checkout xnat-dev
 ```
 
-2. Configurations: The default configuration is sufficient to run the deployment. The following files can be modified if you want to change the default configuration
+2. Inside of the `xnat` directory is a directory named `webapps`. Place into this directory your custom XNAT war. The war file in this directory will *not* be copied into the image, but will be read at runtime. Note that, if you want your XNAT to be found at `http://localhost` you must name your war file `ROOT.war`; otherwise to find your XNAT at `http://localhost/{something}` you must name your war file `something.war`.
+
+3. Configurations: The default configuration is sufficient to run the deployment. The following files can be modified if you want to change the default configuration
 
     - **docker-compose.yml**: How the different containers are deployed. There is a section of build arguments (under `services → xnat-web → build → args`) to control some aspects of the build.
         * If you want to download a different version of XNAT, you can change the `XNAT_VER` variable to some other release.
@@ -32,7 +35,7 @@ $ cd xnat-docker-compose
         * If you need to control some arguments that get sent to tomcat on startup, you can modify the `CATALINA_OPTS` environment variable (under `services → xnat-web → environment`).
     - **xnat/Dockerfile**: Builds the xnat-web image from a tomcat docker image.
 
-3. Start the system
+4. Start the system
 
 ```
 $ docker-compose up -d
@@ -78,10 +81,54 @@ After logging in with credentials admin/admin (username/password resp.) the setu
 When you bring up XNAT with `docker-compose up`, several directories are created (if they don't exist already) to store the persistent data.
 
 * **postgres-data** - Contains the XNAT database
+* **xnat/webapps** - 
 * **xnat/plugins** - Initially contains nothing. However, you can customize your XNAT with plugins by placing jars into this directory and restarting XNAT.
 * **xnat-data/archive** - Contains the XNAT archive
 * **xnat-data/build** - Contains the XNAT build space. This is useful when running the container service plugin.
 * **xnat-data/home/logs** - Contains the XNAT logs.
+
+## Debugging and Profiling
+
+Debugging XNAT and plugins is facilitated by exposing port `8000` on the tomcat container. Corresponding Java parameters are included with CATALINA_OPTS : `-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=8000`.
+
+Profiling via YourKit is similarly supported by exposing port `10001` and appending CATALINA_OPTS with `-agentpath:/usr/local/YourKit-JavaProfiler-2020.9/bin/linux-x86-64/libyjpagent.so=port=10001,listen=all`. The [referenced profiler agent](https://www.yourkit.com/download/docker/YourKit-JavaProfiler-2020.9-docker.zip) is downloaded to the xnat-web images upon initial build. Note that a licensed YourKit Java Profiler application is required to use this feature.
+
+Users may remove these options from `docker-compose.yml` if they are unused or to prepare for secure deployment. 
+
+## Environment variables
+
+To support differing deployment requirements, `xnat-docker-compose` uses variables for settings that tend to change based on environment. By
+default, `docker-compose` takes the values for variables from the [file `.env`](https://docs.docker.com/compose/environment-variables/). Advanced configurations will need to use a customized `.env` file.
+
+To create your own `.env` file, it's best to just copy the existing `.env` and modify the values in there.
+
+### XNAT configuration
+
+These variables directly set options for XNAT itself.
+
+Variable | Description | Default value
+-------- | ----------- | -------------
+XNAT_VERSION | Indicates the version of XNAT to install. | 1.8.0
+XNAT_MIN_HEAP | Indicates the minimum heap size for the Java virtual machine. | 256m
+XNAT_MAX_HEAP | Indicates the minimum heap size for the Java virtual machine. | 4g
+XNAT_SMTP_ENABLED | Indicates whether SMTP operations are enabled in XNAT. | false
+XNAT_SMTP_HOSTNAME | Sets the address for the server to use for SMTP operations. Has no effect if **XNAT_SMTP_ENABLED** is false. |
+XNAT_SMTP_PORT | Sets the port for the server to use for SMTP operations. Has no effect if **XNAT_SMTP_ENABLED** is false. |
+XNAT_SMTP_AUTH | Indicates whether the configured SMTP server requires authentication. Has no effect if **XNAT_SMTP_ENABLED** is false. |
+XNAT_SMTP_USERNAME | Indicates the username to use to authenticate with the configured SMTP server. Has no effect if **XNAT_SMTP_ENABLED** or **XNAT_SMTP_AUTH** are false. |
+XNAT_SMTP_PASSWORD | Indicates the password to use to authenticate with the configured SMTP server. Has no effect if **XNAT_SMTP_ENABLED** or **XNAT_SMTP_AUTH** are false. |
+XNAT_DATASOURCE_ADMIN_PASSWORD | Indicates the password to set for the database administrator user (**postgres**) | xnat1234
+XNAT_DATASOURCE_URL | Specifies the URL to use when accessing the database from XNAT. | jdbc:postgresql://xnat-db/xnat
+XNAT_DATASOURCE_DRIVER | Specifies the driver class to set for the database connection. | org.postgresql.Driver
+XNAT_DATASOURCE_USERNAME | Specifies the username for the XNAT database account. | xnat
+XNAT_DATASOURCE_PASSWORD | Specifies the password for the XNAT database account. | xnat
+XNAT_WEBAPP_FOLDER | Indicates the name of the folder for the XNAT application. This affects the context path for accessing XNAT. The value `ROOT` indicates that XNAT is the root application and can be accessed at http://localhost (i.e. no path). Otherwise, you must add this value to the _end_ of the URL so, e.g. if you specify `xnat` for this variable, you'll access XNAT at http://localhost/xnat. | ROOT
+XNAT_ROOT | Indicates the location of the root XNAT folder on the XNAT container. | /data/xnat
+XNAT_HOME | Indicates the location of the XNAT user's home folder on the XNAT container. | /data/xnat/home
+XNAT_EMAIL | Specifies the primary administrator email address. | harmitage@miskatonic.edu
+XNAT_ACTIVEMQ_URL | Indicates the URL for an external ActiveMQ service to use for messaging. If not specified, XNAT uses its own internal queue. |
+XNAT_ACTIVEMQ_USERNAME | Indicates the username to use to authenticate with the configured ActiveMQ server. Has no effect if **XNAT_ACTIVEMQ_URL** isn't specified. |
+XNAT_ACTIVEMQ_PASSWORD | Indicates the password to use to authenticate with the configured ActiveMQ server. Has no effect if **XNAT_ACTIVEMQ_URL** isn't specified. |
 
 
 ## Troubleshooting
