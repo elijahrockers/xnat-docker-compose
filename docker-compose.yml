@@ -23,6 +23,8 @@ services:
     environment:
       - CATALINA_OPTS=-Xms${XNAT_MIN_HEAP} -Xmx${XNAT_MAX_HEAP} -Dxnat.home=/data/xnat/home
       - XNAT_HOME=/data/xnat/home
+    ports:
+      - 8104:8104
 
   xnat-db:
     build:
